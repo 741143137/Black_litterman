@@ -22,18 +22,26 @@ from pandas_datareader import data as pdr      # For download data
 
 yf.pdr_override()
 tickers = ['EMB','GLD','TLT','IYR','IGIB','IJH']
-BlackRock_adjust = [0.25,0.03,0.04,0.08,0.15,0.24,0.04,0.12,0.05]
+Pathname = '/Users/jax/Downloads/study/796/final project/codes/'
 
-st = datetime.datetime(2007,1,1)
-end = datetime.datetime(2015,10,31)
+st = datetime.datetime(2008,1,1)
+end = datetime.datetime(2015,12,31)
 #out sample
 #st = datetime.datetime(2014,10,31)
 #end = datetime.datetime(2018,10,31)
 
-#close = pd.DataFrame(columns = tickers)
+# Get price data
 close = pdr.get_data_yahoo(tickers,start = st,end = end)["Adj Close"]
 ret = close.pct_change().dropna()
+# Get market weight data
+market_weights = pd.read_csv(Pathname + 'market_weights.csv',index_col=0)
 
+start_date = ret.index[250]
+start_str = str(start_date.year)+'/'+ str(start_date.month)+'/'+str(start_date.day)
+idx = np.where(market_weights.index == start_str)[0][0]
+
+
+# =========================== Data processing =================================================
 window = 3
 N = len(ret)
 M = len(tickers)
@@ -50,6 +58,11 @@ y2[z2<=1] = 1
 y2[z2>1] = 2
 
 print('The data right now is ret, y1, y2')
+
+def get_market_weight(date):
+    start_str = str(date.year)+'/'+ str(date.month)+'/'+str(date.day)
+    weight = market_weights[market_weights.index == start_str]
+    return np.matrix(weight)
 
 # ============================= Train Data using Classification==============================
 
@@ -70,6 +83,7 @@ risk_aversion = 0.5344
 
 total_ret = np.zeros(len(ret)-N_length)
 
+
 for i in range(N_length,len(ret),window_rebalance):
     
     # There are two different ways to estimate current cov
@@ -79,11 +93,13 @@ for i in range(N_length,len(ret),window_rebalance):
     last_day_return = np.matrix(ret.iloc[i-1,:] - ret.iloc[i-1,:].mean()).T
     current_cov = labda*cov_matrix + (1-labda)*last_day_return*last_day_return.T
     
+    # Obtain market capital weight
+    capital_weight = get_market_weight(ret.index[i])
     # Equivebriant return 
-    pi = risk_aversion*np.dot(current_cov,capital_weight(i))
+    pi = risk_aversion*np.dot(current_cov,capital_weight)
     
     # Get subjective view by machine learning classification
-    view = Get_view()
+    view = 0#Get_view()
     
     individual_var = np.matrix(np.diagonal(current_cov))
     Q = pi + view * individual_var
