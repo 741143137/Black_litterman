@@ -36,9 +36,6 @@ ret = close.pct_change().dropna()
 # Get market weight data
 market_weights = pd.read_csv(Pathname + 'market_weights.csv',index_col=0)
 
-start_date = ret.index[250]
-start_str = str(start_date.year)+'/'+ str(start_date.month)+'/'+str(start_date.day)
-idx = np.where(market_weights.index == start_str)[0][0]
 
 
 # =========================== Data processing =================================================
@@ -62,7 +59,7 @@ print('The data right now is ret, y1, y2')
 def get_market_weight(date):
     start_str = str(date.year)+'/'+ str(date.month)+'/'+str(date.day)
     weight = market_weights[market_weights.index == start_str]
-    return np.matrix(weight)
+    return np.matrix(weight).T
 
 # ============================= Train Data using Classification==============================
 
@@ -81,8 +78,9 @@ tao = 1/ (N_length / 250)        # Following result of Meucci(2010)
 # 7 year market risk aversion, can try points like 0.2, 0.5,1,2
 risk_aversion = 0.5344           
 
-total_ret = np.zeros(len(ret)-N_length)
+total_ret = np.zeros(len(ret))
 
+test_pi = []
 
 for i in range(N_length,len(ret),window_rebalance):
     
@@ -91,32 +89,37 @@ for i in range(N_length,len(ret),window_rebalance):
     cov_matrix = ret.iloc[i-N_length:i,:].cov()
     
     last_day_return = np.matrix(ret.iloc[i-1,:] - ret.iloc[i-1,:].mean()).T
-    current_cov = labda*cov_matrix + (1-labda)*last_day_return*last_day_return.T
+    current_cov = np.matrix(labda*cov_matrix + (1-labda)*last_day_return*last_day_return.T)
     
     # Obtain market capital weight
-    capital_weight = get_market_weight(ret.index[i])
+    capital_weight = get_market_weight(ret.index[i-1])
     # Equivebriant return 
-    pi = risk_aversion*np.dot(current_cov,capital_weight)
+    pi = np.matrix(risk_aversion*current_cov*capital_weight)
+    
+    ''' test test_pi.append(pi)'''
     
     # Get subjective view by machine learning classification
-    view = 0#Get_view()
+    view = 0#Get_view(feature,y1,y2)
     
-    individual_var = np.matrix(np.diagonal(current_cov))
-    Q = pi + view * individual_var
+    individual_var = np.diagonal(current_cov)
+    Q = pi + view * np.matrix(individual_var**0.5).T
     
     # Note, since we 
-    omega = np.diag(individual_var)
+    omega = np.matrix(np.diag(individual_var))
     
-    posterior_mean = pi + tao* np.dot((current_cov*tao+omega).I,Q - pi)
+    posterior_mean = pi + tao*current_cov * (current_cov*tao+omega).I * (Q - pi)
     # Exact formula should be pi + tao* np.dot(current_cov.I,Q - pi)
     posterior_sigma = current_cov + ( (tao*current_cov).I + omega.I ).I
     
     optimal_weight = posterior_sigma.I * posterior_mean / risk_aversion
     
     #calculate return
-    total_ret[i:i+window_rebalance] = optimal_weight * ret.iloc[i:i+window_rebalance,:]
     
+    if i+window_rebalance < len(ret):
+        total_ret[i:i+window_rebalance] = np.dot(ret.iloc[i:i+window_rebalance,:],optimal_weight).getA()[:,0]
+    else:
+        total_ret[i:] = np.dot(ret.iloc[i:i+window_rebalance,:],optimal_weight).getA()[:,0]
 
-
+net_value = np.cumprod(1+total_ret)
 
     
