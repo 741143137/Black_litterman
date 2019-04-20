@@ -65,7 +65,8 @@ N_length = 250
 window_rebalance = 5             # Rebalance every week
 labda = 0.94
 tao = 1/ (N_length / 250)        # Following result of Meucci(2010)           
-risk_aversion = 2
+# 7 year market risk aversion, can try points like 0.2, 0.5,1,2
+risk_aversion = 0.5344           
 
 total_ret = np.zeros(len(ret)-N_length)
 
@@ -84,7 +85,11 @@ for i in range(N_length,len(ret),window_rebalance):
     # Get subjective view by machine learning classification
     view = Get_view()
     
-    Q = pi + view * diag(cov_matrix)
+    individual_var = np.matrix(np.diagonal(current_cov))
+    Q = pi + view * individual_var
+    
+    # Note, since we 
+    omega = np.diag(individual_var)
     
     posterior_mean = pi + tao* np.dot((current_cov*tao+omega).I,Q - pi)
     # Exact formula should be pi + tao* np.dot(current_cov.I,Q - pi)
