@@ -6,6 +6,11 @@ Created on Fri Apr 26 21:16:13 2019
 @author: jax
 """
 
+'''
+feature_select.py is used to compute and select features for each ETF
+final return is a list contains six dataframe
+'''
+
 import pandas as pd
 import copy
 import numpy as np
@@ -16,6 +21,9 @@ import talib as tl
 
 # One change: technical indicator become t-1
 
+# Previous_returns is the function to get lag terms of  
+# time series data, n is how long the window is
+# j is the lag term
 def previous_returns(df, n, j):
     #n weeks, j lags
     #returns = df.pct_change(periods = 5*n)
@@ -25,31 +33,10 @@ def previous_returns(df, n, j):
     return returns
 
 
-def feature_selection(df):
-    Y1 = df['Y1']
-    Y2 = df['Y2']
-    featurename_list = list(df.columns)
-    featurename_list.remove('Y1')
-    featurename_list.remove('Y2')
+# feature_into compute total 105 features for six ETF
+# close is close price for six ETF
+# price is price information like open,high,low for ETF and other features like SPY, VIX
 
-    drop_list = []
-    for featurename in featurename_list:
-        A = df[featurename][df['Y1'] == np.unique(Y1)[0]]
-        B = df[featurename][df['Y1'] == np.unique(Y1)[1]]
-        SE = np.sqrt(np.var(A) / len(A) + np.var(B) / len(B))
-        score = abs(np.mean(A) - np.mean(B)) / SE
-
-        A2 = df[featurename][df['Y2'] == np.unique(Y2)[0]]
-        B2 = df[featurename][df['Y2'] == np.unique(Y2)[1]]
-        SE2 = np.sqrt(np.var(A2) / len(A2) + np.var(B2) / len(B2))
-        score2 = abs(np.mean(A2) - np.mean(B2)) / SE2
-        if score <= 1 or score2 <= 1:
-            drop_list += [featurename]
-
-    return drop_list
-
-
-#feature means that the next week return at this time point using weekly data
 def feature_intro(close, price):
 
     returns = close.pct_change()
@@ -153,8 +140,7 @@ def feature_intro(close, price):
         col = df.columns[0][:3]
         if col == 'IGI':
             col = 'IGIB'
-#        drop_list = feature_selection(df.iloc[:, 6:])
-#        df.drop(drop_list, axis=1, inplace=True)
+
         df.drop([col + '_close', col + '_volume', col + '_returns', col + '_Open', col + '_High',
                  col + '_Low'], axis=1, inplace=True)
 
@@ -179,7 +165,7 @@ def feature_intro(close, price):
         x_train, x_test, y_train, y_test = sk.model_selection.train_test_split(input, output, random_state=1,
                                                                                train_size=0.6)
         #print(x_train)
-        scaler = sk.preprocessing.StandardScaler().fit(x_train)  # 通过训练集获得归一化函数模型。（也就是先减几，再除以几的函数）。在训练集和测试集上都使用这个归一化函数
+        scaler = sk.preprocessing.StandardScaler().fit(x_train)  
         x_train_transformed = scaler.transform(x_train)
 
         clf1 = RandomForestClassifier(n_estimators=100,max_features = 'sqrt',random_state=10)

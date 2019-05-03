@@ -3,6 +3,12 @@
 """
 Created on Fri Dec 14 18:17:56 2018
 """
+
+'''
+Backtest is the class that receive returns of portfolio as input
+and output all kinds of evalution metrics like Sharpe ratio, Max drawdown
+'''
+
 #--------------------------------------------- BackTest Functions --------------------------------------------------
 # Parameters Input:
     # rets_df(DataFrame): returns of the portfolios
@@ -41,8 +47,8 @@ class Backtest:
 
     def cal_market_beta(self):
         mkt_var = self.np.var(self.rets[self.mkt])
-        cov = self.pd.Series({symbol: self.rets[self.mkt].cov(self.rets[symbol]) for symbol in self.rets })
-        return cov/mkt_var
+        cov = self.pd.Series({symbol: self.rets[self.mkt].cov(self.rets[symbol]) for symbol in self.rets.columns })
+        return cov/mkt_var    #self.np.ones(self.rets.shape[1])
     
     def cal_max_drawdown(self):
         net_vals = self.np.cumprod(self.rets+1)

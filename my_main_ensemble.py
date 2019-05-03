@@ -2,15 +2,13 @@
 # -*- coding: utf-8 -*-
 """
 Created on Fri Apr 26 20:37:26 2019
-
-Change: feature shift(1), replace function by Y1, Y2
 """
 
 '''
-My_main function is the main function used to test single machine leanring 
-method to produce views
+My_main function is the main function used to test all machine leanring methods together
 Including downloading data, process data, obtain features, make rolling prediction and backtest
 ''' 
+
 
 # -------------------------------------------- Get Data & Parameters ------------------------------------------------
 
@@ -21,10 +19,6 @@ import pandas as pd
 import numpy as np
 import datetime
 
-#pd.core.common.is_list_like = pd.api.types.is_list_like
-#import fix_yahoo_finance as yf
-#from pandas_datareader import data as pdr  # For download data
-
 # Own code function
 from Backtest import Backtest
 from feature_select import feature_intro
@@ -32,8 +26,8 @@ from view import get_view
 
 
 #yf.pdr_override()
+# Six ETF to test
 tickers = ['EMB', 'GLD', 'TLT', 'IYR', 'IGIB', 'IJH']
-weight4060 = np.matrix([0.15,0.15,0.2,0.15,0.2,0.15]).T
 features = ['SPY', '^VIX', '^TNX', '^IRX']
 Pathname = '/Users/jax/Downloads/study/796/final project/codes/weekly data/'
 
@@ -60,7 +54,9 @@ ret = close.pct_change().dropna()
 # Get market weight data
 market_weights = pd.read_csv(Pathname+'market_weights.csv', index_col=0)
 
-# =================== Define the function to get weight according to date ===============================
+# =========================== Data processing =================================================
+print('The data right now is ret, y1, y2')
+
 
 def get_market_weight(date):
     start_str = str(date.year) + '/' + str(date.month) + '/' + str(date.day)
@@ -86,11 +82,12 @@ for i in range(len(tickers+features)):
         index_name[j] = (tickers+features)[i]+ index_name[j]
     dataframe_columns += index_name
 price = pd.DataFrame(price,columns = dataframe_columns ,index =date )
+
 feature_list_Y1, feature_list_Y2 = feature_intro(close, price)
 
 # ===================================================
 #''' parameter initialziation '''
-class_type ='Random Forest' #'Logistic' # 'SVM'  #'Decision Tree'# 'KNN' #  # #  # 'Bayesian'##    
+class_type = 'Logistic'#'Random Forest' #'Bayesian' #'SVM' # 'KNN'    # 'Bayesian'##    
 Ndata = 200   # How many training data each time to fix
 window_rebalance = 1  # Rebalance every week
 labda = 0.94
@@ -99,17 +96,20 @@ tao = 1 / (Ndata / 52)  # Following result of Meucci(2010)
 risk_aversion = 0.5344
 
 
-######################## ==  Running Strategy ======= ################################################
-total_ret = np.zeros(len(ret))
+###########################################################################################
+
 capital_ret = np.zeros(len(ret))
 weight = pd.DataFrame(index = ret.index,columns = tickers)
 final_result = np.zeros([3,6])
-direct_ret = np.zeros(len(ret))
-
 t = 0
 
-for i in range(Ndata+50, len(ret)-90, window_rebalance):
+type_list = ['Random Forest','Bayesian','SVM','Logistic','KNN','Adaboosting']
+#type_list = ['Random Forest','SVM','Logistic']
+total_ret = pd.DataFrame(index = ret.index,columns = type_list)
+total_view = 0
 
+for i in range(Ndata+50, len(ret)-90, window_rebalance):
+#for i in range(len(ret)-90,len(ret), window_rebalance):  # This one is for out-of-sample-test
     # There are two different ways to estimate current cov
     # 1 is use sample cov, 2 is use EWMA covariance matrix
     cov_matrix = ret.iloc[i-Ndata:i, :].cov()
@@ -124,52 +124,54 @@ for i in range(Ndata+50, len(ret)-90, window_rebalance):
     pi = np.matrix(risk_aversion * current_cov * capital_weight)
 
     # multi_class
-    view,result = get_view(feature_list_Y1, feature_list_Y2,class_type,ret.index[i],Ndata)
-    final_result += result 
     t +=1
-    #view = 0
-    #view = get_view(feature_list, type, ret.index[250])
-
-    individual_var = np.diagonal(current_cov)
-    ''' mapping function '''
-    #Q = pi + np.matrix(view * np.array(individual_var ** 0.5) * 0.2).T
-    Q = pi + np.matrix(view * np.array(individual_var)).T
-    # Note, since we
-    omega = np.matrix(np.diag(individual_var))
-
-    posterior_mean = pi + tao * current_cov * (current_cov * tao + omega).I * (Q - pi)
-    # Exact formula should be pi + tao* np.dot(current_cov.I,Q - pi)
-    posterior_sigma = current_cov + ((tao * current_cov).I + omega.I).I
-
-    optimal_weight = posterior_sigma.I * posterior_mean / risk_aversion
-    optimal_weight = optimal_weight / abs(optimal_weight).sum()
     
-    weight.iloc[i,:] = optimal_weight.getA()[:,0].T
+    for class_type in type_list:
+        view,result = get_view(feature_list_Y1,feature_list_Y2,class_type,ret.index[i],Ndata)
+        
+        # Record total view as model ensamble
+        total_view += view
+        final_result += result
     
-    total_ret[i] = np.dot(ret.iloc[i, :], optimal_weight).getA()[0][0]
+        individual_var = np.diagonal(current_cov)
+        ''' mapping function '''
+        #Q = pi + np.matrix(view * np.array(individual_var ** 0.5) * 0.2).T
+        Q = pi + np.matrix(view * np.array(individual_var)).T
+        # Note, since we
+        omega = np.matrix(np.diag(individual_var))
+
+        posterior_mean = pi + tao * current_cov * (current_cov * tao + omega).I * (Q - pi)
+        # Exact formula should be pi + tao* np.dot(current_cov.I,Q - pi)
+        posterior_sigma = current_cov + ((tao * current_cov).I + omega.I).I
+
+        optimal_weight = posterior_sigma.I * posterior_mean / risk_aversion
+        optimal_weight = optimal_weight / abs(optimal_weight).sum()
+    
+        weight.iloc[i,:] = optimal_weight.getA()[:,0].T
+    
+        total_ret[class_type][i] = np.dot(ret.iloc[i, :], optimal_weight).getA()[0][0]
     
     # If view = 0
     capital_ret[i] = np.dot(ret.iloc[i, :], capital_weight).getA()[0][0]
-    # Direct ret from machine learning
-    direct_ret[i] = sum(ret.iloc[i, :] * view*0.1)
 
-final_ret = pd.Series(total_ret, index=ret.index).dropna()
-#plt.plot(net_value)
+total_ret.dropna(inplace = True)
+net_value = np.cumprod(1+total_ret)
+net_value.plot()
 
-# Backtest and benchmark
+
+## Backtest and benchmark
 spy_ret = price['SPYClose'].pct_change().dropna()
-all_ret = pd.DataFrame({'BL':final_ret,'Market':capital_ret,'SPY':spy_ret,'Direct_view':direct_ret})
+market_ret = pd.Series(capital_ret,index=ret.index,name='market')
+df = pd.concat([total_ret,market_ret,spy_ret],axis=1,join = 'inner')
 
-
-# Get rid of all rows that ret = 0
-df = all_ret[~all_ret['BL'].isin([0])]
+## Get rid of all rows that ret = 0
+#df = all_ret[~all_ret['BL'].isin([0])]
 net_value = np.cumprod(1+df)
-net_value.iloc[:,0:3].plot()
-
-backtest = Backtest(df,'SPY',0.05,52)
-result =backtest.summary()
-print(result)
-evaluation = pd.DataFrame(final_result/t,index=['sign_predict','range_predict','total_predict'],\
-                          columns = tickers)
+net_value.iloc[:,0:4].plot()
+#
+backtest = Backtest(df,'SPYClose',0.05,52)
+#print(backtest.summary())
+#evaluation = pd.DataFrame(final_result/t,index=['sign_predict','range_predict','total_predict'],\
+#                          columns = tickers)
 #evaluation['mean'] = np.mean(evaluation,axis=1)
-print(evaluation)
+#print(evaluation)
