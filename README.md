@@ -7,4 +7,4 @@ Data source:
 1. Price data directly come from Yahoo finance
 2. Market capitalization of ETF come from Bloomberg
 
-The files with comments "final" is the final program
+The "final version" folder is the final program
